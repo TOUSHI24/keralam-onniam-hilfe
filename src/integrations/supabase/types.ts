@@ -14,7 +14,69 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      chat_history: {
+        Row: {
+          created_at: string
+          id: string
+          language: string
+          question: string
+          response: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          language?: string
+          question: string
+          response: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          language?: string
+          question?: string
+          response?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      farmers: {
+        Row: {
+          created_at: string
+          crops: string[]
+          id: string
+          land_size: number | null
+          location: string
+          name: string
+          soil_type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          crops?: string[]
+          id?: string
+          land_size?: number | null
+          location: string
+          name: string
+          soil_type: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          crops?: string[]
+          id?: string
+          land_size?: number | null
+          location?: string
+          name?: string
+          soil_type?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
