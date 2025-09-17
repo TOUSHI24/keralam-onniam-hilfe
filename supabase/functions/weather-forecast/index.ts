@@ -1,9 +1,12 @@
+import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+const WEATHERBIT_API_KEY = Deno.env.get('WEATHERBIT_API_KEY');
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -18,92 +21,85 @@ serve(async (req) => {
       throw new Error('Location is required');
     }
 
-    const openWeatherApiKey = Deno.env.get('OPENWEATHERMAP_API_KEY');
-    
-    if (!openWeatherApiKey) {
-      throw new Error('OpenWeatherMap API key not configured');
+    if (!WEATHERBIT_API_KEY) {
+      throw new Error('Weatherbit API key not configured');
     }
 
-    console.log('Fetching weather for location:', location);
-
-    // Get coordinates from location name
-    const geocodeUrl = `https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(location)},Kerala,IN&limit=1&appid=${openWeatherApiKey}`;
+    // Format location for API call (append Kerala, IN if not already specified)
+    const formattedLocation = location.includes('Kerala') ? location : `${location}, Kerala, IN`;
     
-    const geocodeResponse = await fetch(geocodeUrl);
-    if (!geocodeResponse.ok) {
-      throw new Error('Failed to geocode location');
+    console.log(`Fetching weather for: ${formattedLocation}`);
+
+    // Fetch current weather from Weatherbit
+    const currentWeatherResponse = await fetch(
+      `https://api.weatherbit.io/v2.0/current?city=${encodeURIComponent(formattedLocation)}&key=${WEATHERBIT_API_KEY}&units=M`
+    );
+
+    if (!currentWeatherResponse.ok) {
+      throw new Error(`Weather API error: ${currentWeatherResponse.status}`);
     }
 
-    const geocodeData = await geocodeResponse.json();
-    if (!geocodeData.length) {
-      throw new Error('Location not found');
+    const currentWeatherData = await currentWeatherResponse.json();
+    
+    if (!currentWeatherData.data || currentWeatherData.data.length === 0) {
+      throw new Error('No weather data found for this location');
     }
 
-    const { lat, lon } = geocodeData[0];
+    // Fetch 5-day forecast with 3-hour intervals from Weatherbit
+    const forecastResponse = await fetch(
+      `https://api.weatherbit.io/v2.0/forecast/3hourly?city=${encodeURIComponent(formattedLocation)}&key=${WEATHERBIT_API_KEY}&hours=120&units=M`
+    );
 
-    // Get current weather and 5-day forecast
-    const weatherUrl = `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${openWeatherApiKey}&units=metric`;
-    
-    const weatherResponse = await fetch(weatherUrl);
-    if (!weatherResponse.ok) {
-      throw new Error('Failed to fetch weather data');
+    if (!forecastResponse.ok) {
+      throw new Error(`Forecast API error: ${forecastResponse.status}`);
     }
 
-    const weatherData = await weatherResponse.json();
-    
-    // Process the forecast data to get daily summaries
-    const dailyForecast = [];
-    const processedDays = new Set();
+    const forecastData = await forecastResponse.json();
 
-    for (const item of weatherData.list) {
-      const date = new Date(item.dt * 1000).toDateString();
-      
-      if (!processedDays.has(date) && dailyForecast.length < 5) {
-        processedDays.add(date);
-        dailyForecast.push({
-          date: date,
-          temperature: Math.round(item.main.temp),
-          description: item.weather[0].description,
-          humidity: item.main.humidity,
-          windSpeed: item.wind.speed,
-          icon: item.weather[0].icon
-        });
-      }
-    }
+    const currentData = currentWeatherData.data[0];
 
-    // Get current weather
-    const currentWeatherUrl = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${openWeatherApiKey}&units=metric`;
-    
-    const currentResponse = await fetch(currentWeatherUrl);
-    const currentData = await currentResponse.json();
-
-    const result = {
-      location: geocodeData[0].name,
+    // Format the response
+    const formattedResponse = {
+      success: true,
+      location: `${currentData.city_name}, ${currentData.state_code}`,
       current: {
-        temperature: Math.round(currentData.main.temp),
-        description: currentData.weather[0].description,
-        humidity: currentData.main.humidity,
-        windSpeed: currentData.wind.speed,
-        icon: currentData.weather[0].icon
+        temperature: Math.round(currentData.temp),
+        description: currentData.weather.description,
+        humidity: currentData.rh,
+        windSpeed: Math.round(currentData.wind_spd * 3.6) / 3.6, // Convert to m/s and round
+        icon: currentData.weather.icon,
       },
-      forecast: dailyForecast,
-      success: true
+      forecast: forecastData.data.slice(0, 40).map((item: any) => ({ // 5 days * 8 intervals = 40
+        date: item.datetime,
+        temperature: Math.round(item.temp),
+        description: item.weather.description,
+        humidity: item.rh,
+        windSpeed: Math.round(item.wind_spd * 3.6) / 3.6,
+        icon: item.weather.icon,
+      })),
     };
 
-    console.log('Weather data retrieved successfully');
+    console.log('Weather data fetched successfully from Weatherbit');
 
-    return new Response(JSON.stringify(result), {
+    return new Response(JSON.stringify(formattedResponse), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
   } catch (error) {
-    console.error('Error in weather forecast function:', error);
-    return new Response(JSON.stringify({ 
-      error: error.message,
-      success: false 
-    }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    console.error('Error in weather-forecast function:', error);
+    
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: error.message,
+        location: null,
+        current: null,
+        forecast: []
+      }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
+    );
   }
 });

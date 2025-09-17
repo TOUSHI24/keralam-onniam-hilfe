@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, MapPin, Layers, Wheat, Ruler, LogOut, Edit } from 'lucide-react';
+import { User, MapPin, Layers, Wheat, Ruler, LogOut, Edit, Globe } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -8,11 +8,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { keralaDistricts, keralaVillages } from '@/data/kerala-locations';
 import BottomNavigation from '@/components/BottomNavigation';
 
 interface FarmerProfile {
   name: string;
   location: string;
+  district: string;
+  village: string;
   soil_type: string;
   crops: string[];
   land_size: number | null;
@@ -21,9 +25,12 @@ interface FarmerProfile {
 const Profile = () => {
   const { user, signOut } = useAuth();
   const { toast } = useToast();
+  const { language, setLanguage, t } = useLanguage();
   const [profile, setProfile] = useState<FarmerProfile>({
     name: '',
     location: '',
+    district: '',
+    village: '',
     soil_type: '',
     crops: [],
     land_size: null,
@@ -66,7 +73,9 @@ const Profile = () => {
       if (data) {
         setProfile({
           name: data.name,
-          location: data.location,
+          location: data.location || '',
+          district: data.district || '',
+          village: data.village || '',
           soil_type: data.soil_type,
           crops: data.crops || [],
           land_size: data.land_size,
@@ -90,10 +99,10 @@ const Profile = () => {
   const saveProfile = async () => {
     if (!user) return;
 
-    if (!profile.name || !profile.location || !profile.soil_type) {
+    if (!profile.name || !profile.district || !profile.village || !profile.soil_type) {
       toast({
-        title: "Error",
-        description: "Please fill in all required fields",
+        title: t('error'),
+        description: t('fill_required_fields'),
         variant: "destructive",
       });
       return;
@@ -106,7 +115,9 @@ const Profile = () => {
         .upsert({
           user_id: user.id,
           name: profile.name,
-          location: profile.location,
+          location: `${profile.village}, ${profile.district}`,
+          district: profile.district,
+          village: profile.village,
           soil_type: profile.soil_type,
           crops: profile.crops,
           land_size: profile.land_size,
@@ -116,14 +127,14 @@ const Profile = () => {
 
       setIsEditing(false);
       toast({
-        title: "Success",
-        description: "Profile saved successfully!",
+        title: t('success'),
+        description: t('profile_saved_success'),
       });
     } catch (error) {
       console.error('Error saving profile:', error);
       toast({
-        title: "Error",
-        description: "Failed to save profile",
+        title: t('error'),
+        description: t('failed_to_save_profile'),
         variant: "destructive",
       });
     } finally {
@@ -165,8 +176,17 @@ const Profile = () => {
       <div className="container mx-auto p-4 space-y-6">
         {/* Header */}
         <div className="flex justify-between items-center">
-          <h1 className="text-3xl font-bold text-foreground">Farmer Profile</h1>
+          <h1 className="text-3xl font-bold text-foreground">{t('farmer_profile')}</h1>
           <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setLanguage(language === 'en' ? 'ml' : 'en')}
+              className="rounded-xl"
+            >
+              <Globe className="w-4 h-4 mr-2" />
+              {language === 'en' ? 'മലയാളം' : 'English'}
+            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -174,7 +194,7 @@ const Profile = () => {
               className="rounded-xl"
             >
               <Edit className="w-4 h-4 mr-2" />
-              {isEditing ? 'Cancel' : 'Edit'}
+              {isEditing ? t('cancel') : t('edit')}
             </Button>
             <Button
               variant="ghost"
@@ -191,12 +211,12 @@ const Profile = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <User className="w-5 h-5 text-primary" />
-              Personal Information
+              {t('personal_information')}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <Label htmlFor="name">Full Name *</Label>
+              <Label htmlFor="name">{t('full_name')} *</Label>
               <div className="relative">
                 <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
                 <Input
@@ -204,29 +224,62 @@ const Profile = () => {
                   value={profile.name}
                   onChange={(e) => setProfile(prev => ({ ...prev, name: e.target.value }))}
                   disabled={!isEditing}
-                  placeholder="Enter your full name"
+                  placeholder={t('enter_full_name')}
                   className="pl-10 h-12 rounded-xl border-border/50"
                 />
               </div>
             </div>
 
             <div>
-              <Label htmlFor="location">Location *</Label>
-              <div className="relative">
-                <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-                <Input
-                  id="location"
-                  value={profile.location}
-                  onChange={(e) => setProfile(prev => ({ ...prev, location: e.target.value }))}
-                  disabled={!isEditing}
-                  placeholder="e.g., Kochi, Kerala"
-                  className="pl-10 h-12 rounded-xl border-border/50"
-                />
-              </div>
+              <Label htmlFor="district">{t('district')} *</Label>
+              <Select
+                value={profile.district}
+                onValueChange={(value) => {
+                  setProfile(prev => ({ ...prev, district: value, village: '' }));
+                }}
+                disabled={!isEditing}
+              >
+                <SelectTrigger className="h-12 rounded-xl border-border/50">
+                  <div className="flex items-center gap-2">
+                    <MapPin className="w-4 h-4 text-muted-foreground" />
+                    <SelectValue placeholder={t('select_district')} />
+                  </div>
+                </SelectTrigger>
+                <SelectContent className="bg-background border border-border">
+                  {keralaDistricts.map((district) => (
+                    <SelectItem key={district.value} value={district.value}>
+                      {district.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div>
-              <Label htmlFor="soil-type">Soil Type *</Label>
+              <Label htmlFor="village">{t('village_town')} *</Label>
+              <Select
+                value={profile.village}
+                onValueChange={(value) => setProfile(prev => ({ ...prev, village: value }))}
+                disabled={!isEditing || !profile.district}
+              >
+                <SelectTrigger className="h-12 rounded-xl border-border/50">
+                  <div className="flex items-center gap-2">
+                    <MapPin className="w-4 h-4 text-muted-foreground" />
+                    <SelectValue placeholder={t('select_village')} />
+                  </div>
+                </SelectTrigger>
+                <SelectContent className="bg-background border border-border">
+                  {profile.district && keralaVillages[profile.district]?.map((village) => (
+                    <SelectItem key={village.value} value={village.value}>
+                      {village.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label htmlFor="soil-type">{t('soil_type')} *</Label>
               <Select
                 value={profile.soil_type}
                 onValueChange={(value) => setProfile(prev => ({ ...prev, soil_type: value }))}
@@ -235,10 +288,10 @@ const Profile = () => {
                 <SelectTrigger className="h-12 rounded-xl border-border/50">
                   <div className="flex items-center gap-2">
                     <Layers className="w-4 h-4 text-muted-foreground" />
-                    <SelectValue placeholder="Select soil type" />
+                    <SelectValue placeholder={t('select_soil_type')} />
                   </div>
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="bg-background border border-border">
                   {soilTypes.map((soil) => (
                     <SelectItem key={soil} value={soil}>{soil}</SelectItem>
                   ))}
@@ -247,7 +300,7 @@ const Profile = () => {
             </div>
 
             <div>
-              <Label htmlFor="land-size">Land Size (Acres)</Label>
+              <Label htmlFor="land-size">{t('land_size')}</Label>
               <div className="relative">
                 <Ruler className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
                 <Input
@@ -257,7 +310,7 @@ const Profile = () => {
                   value={profile.land_size || ''}
                   onChange={(e) => setProfile(prev => ({ ...prev, land_size: e.target.value ? parseFloat(e.target.value) : null }))}
                   disabled={!isEditing}
-                  placeholder="Enter land size in acres"
+                  placeholder={t('enter_land_size')}
                   className="pl-10 h-12 rounded-xl border-border/50"
                 />
               </div>
@@ -269,7 +322,7 @@ const Profile = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Wheat className="w-5 h-5 text-primary" />
-              Crops Grown
+              {t('crops_grown')}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -277,9 +330,9 @@ const Profile = () => {
               <div className="flex gap-2">
                 <Select value={newCrop} onValueChange={setNewCrop}>
                   <SelectTrigger className="flex-1 rounded-xl">
-                    <SelectValue placeholder="Select crop to add" />
+                    <SelectValue placeholder={t('select_crop_to_add')} />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="bg-background border border-border">
                     {commonCrops
                       .filter(crop => !profile.crops.includes(crop))
                       .map((crop) => (
@@ -288,7 +341,7 @@ const Profile = () => {
                   </SelectContent>
                 </Select>
                 <Button onClick={addCrop} disabled={!newCrop} className="rounded-xl">
-                  Add
+                  {t('add')}
                 </Button>
               </div>
             )}
@@ -311,7 +364,7 @@ const Profile = () => {
                 </div>
               ))}
               {profile.crops.length === 0 && (
-                <p className="text-muted-foreground text-sm">No crops added yet</p>
+                <p className="text-muted-foreground text-sm">{t('no_crops_added')}</p>
               )}
             </div>
           </CardContent>
@@ -326,10 +379,10 @@ const Profile = () => {
             {loading ? (
               <div className="flex items-center gap-2">
                 <div className="animate-spin w-4 h-4 border-2 border-primary-foreground border-t-transparent rounded-full" />
-                Saving Profile...
+                {t('saving_profile')}
               </div>
             ) : (
-              'Save Profile'
+              t('save_profile')
             )}
           </Button>
         )}

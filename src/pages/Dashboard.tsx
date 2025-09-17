@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import BottomNavigation from '@/components/BottomNavigation';
@@ -30,6 +31,8 @@ interface WeatherData {
 interface FarmerProfile {
   name: string;
   location: string;
+  district: string;
+  village: string;
   soil_type: string;
   crops: string[];
   land_size: number | null;
@@ -38,6 +41,7 @@ interface FarmerProfile {
 const Dashboard = () => {
   const { user, session } = useAuth();
   const { toast } = useToast();
+  const { t } = useLanguage();
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [profile, setProfile] = useState<FarmerProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -67,20 +71,25 @@ const Dashboard = () => {
       if (data) {
         setProfile({
           name: data.name,
-          location: data.location,
+          location: data.location || '',
+          district: data.district || '',
+          village: data.village || '',
           soil_type: data.soil_type,
           crops: data.crops || [],
           land_size: data.land_size,
         });
         
-        // Fetch weather for user's location
-        await fetchWeather(data.location);
+        // Fetch weather for user's village (primary location)
+        const weatherLocation = data.village || data.location;
+        if (weatherLocation) {
+          await fetchWeather(weatherLocation);
+        }
       }
     } catch (error) {
       console.error('Error fetching profile:', error);
       toast({
-        title: "Error",
-        description: "Failed to load profile data",
+        title: t('error'),
+        description: t('failed_to_load_profile'),
         variant: "destructive",
       });
     } finally {
@@ -110,8 +119,8 @@ const Dashboard = () => {
     } catch (error) {
       console.error('Error fetching weather:', error);
       toast({
-        title: "Weather Error",
-        description: "Could not fetch weather data for your location",
+        title: t('weather_error'),
+        description: t('weather_unavailable'),
         variant: "destructive",
       });
     } finally {
@@ -188,8 +197,8 @@ const Dashboard = () => {
       <div className="container mx-auto p-4 space-y-6">
         {/* Header */}
         <div className="text-center">
-          <h1 className="text-3xl font-bold text-foreground">Farm Dashboard</h1>
-          <p className="text-muted-foreground mt-2">Welcome back, {profile.name}!</p>
+          <h1 className="text-3xl font-bold text-foreground">{t('farm_dashboard')}</h1>
+          <p className="text-muted-foreground mt-2">{t('welcome_back')}, {profile.name}!</p>
         </div>
 
         {/* Profile Summary */}
@@ -197,28 +206,28 @@ const Dashboard = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <MapPin className="w-5 h-5 text-primary" />
-              Farm Overview
+              {t('farm_overview')}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <p className="text-sm text-muted-foreground">Location</p>
-                <p className="font-semibold">{profile.location}</p>
+                <p className="text-sm text-muted-foreground">{t('location')}</p>
+                <p className="font-semibold">{profile.village && profile.district ? `${profile.village}, ${profile.district}` : profile.location}</p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Soil Type</p>
+                <p className="text-sm text-muted-foreground">{t('soil_type')}</p>
                 <p className="font-semibold">{profile.soil_type}</p>
               </div>
               {profile.land_size && (
                 <div>
-                  <p className="text-sm text-muted-foreground">Land Size</p>
+                  <p className="text-sm text-muted-foreground">{t('land_size')}</p>
                   <p className="font-semibold">{profile.land_size} acres</p>
                 </div>
               )}
               <div>
                 <p className="text-sm text-muted-foreground">Crops</p>
-                <p className="font-semibold">{profile.crops.length} varieties</p>
+                <p className="font-semibold">{profile.crops.length} {t('varieties')}</p>
               </div>
             </div>
             
@@ -237,7 +246,7 @@ const Dashboard = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Cloud className="w-5 h-5 text-primary" />
-              Weather Forecast
+              {t('weather_forecast')}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -266,13 +275,13 @@ const Dashboard = () => {
                     <div className="flex items-center gap-2">
                       <Droplets className="w-4 h-4 text-blue-500" />
                       <span className="text-sm">
-                        Humidity: {weather.current.humidity}%
+                        {t('humidity')}: {weather.current.humidity}%
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
                       <Wind className="w-4 h-4 text-gray-500" />
                       <span className="text-sm">
-                        Wind: {weather.current.windSpeed} m/s
+                        {t('wind')}: {weather.current.windSpeed} m/s
                       </span>
                     </div>
                   </div>
@@ -314,14 +323,17 @@ const Dashboard = () => {
               <div className="text-center py-8">
                 <Cloud className="w-12 h-12 mx-auto mb-4 text-muted-foreground opacity-50" />
                 <p className="text-muted-foreground">
-                  Weather data unavailable for your location
+                  {t('weather_data_unavailable')}
                 </p>
                 <Button
                   variant="outline"
-                  onClick={() => profile.location && fetchWeather(profile.location)}
+                  onClick={() => {
+                    const weatherLocation = profile.village || profile.location;
+                    if (weatherLocation) fetchWeather(weatherLocation);
+                  }}
                   className="mt-4"
                 >
-                  Retry
+                  {t('retry')}
                 </Button>
               </div>
             )}
@@ -333,7 +345,7 @@ const Dashboard = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <TrendingUp className="w-5 h-5 text-primary" />
-              Recommended Crops for {profile.soil_type}
+              {t('recommended_crops')} {profile.soil_type}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -346,7 +358,7 @@ const Dashboard = () => {
                   <span className="font-medium">{crop}</span>
                   {profile.crops.includes(crop) && (
                     <Badge variant="secondary" className="text-xs">
-                      Growing
+                      {t('growing')}
                     </Badge>
                   )}
                 </div>
@@ -356,7 +368,7 @@ const Dashboard = () => {
             <div className="mt-4 p-3 bg-accent/20 rounded-lg">
               <p className="text-sm text-muted-foreground">
                 <Calendar className="w-4 h-4 inline mr-2" />
-                Current Season: {currentSeason} • Best planting time varies by crop
+                {t('current_season')}: {t(currentSeason.toLowerCase())} • {t('best_planting_time')}
               </p>
             </div>
           </CardContent>

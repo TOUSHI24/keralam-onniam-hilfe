@@ -45,35 +45,41 @@ export type Database = {
         Row: {
           created_at: string
           crops: string[]
+          district: string | null
           id: string
           land_size: number | null
-          location: string
+          location: string | null
           name: string
           soil_type: string
           updated_at: string
           user_id: string
+          village: string | null
         }
         Insert: {
           created_at?: string
           crops?: string[]
+          district?: string | null
           id?: string
           land_size?: number | null
-          location: string
+          location?: string | null
           name: string
           soil_type: string
           updated_at?: string
           user_id: string
+          village?: string | null
         }
         Update: {
           created_at?: string
           crops?: string[]
+          district?: string | null
           id?: string
           land_size?: number | null
-          location?: string
+          location?: string | null
           name?: string
           soil_type?: string
           updated_at?: string
           user_id?: string
+          village?: string | null
         }
         Relationships: []
       }
